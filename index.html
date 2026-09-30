@@ -118,6 +118,23 @@ code { font: 0.9em/1.4 var(--mono); background: var(--code-bg); padding: 1px 5px
 .codebox { position: relative; }
 .codebox pre { margin: 0; background: var(--code-bg); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font: 12.5px/1.55 var(--mono); }
 .codebox button { position: absolute; top: 6px; right: 6px; padding: 5px 9px; font-size: 12px; background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
+.pgrid { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.pgrid th { text-align: center; font-size: 11.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); font-weight: 600; padding: 6px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.pgrid th:first-child, .pgrid td:first-child { text-align: left; }
+.pgrid td { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: center; vertical-align: middle; }
+.pgrid td:first-child { min-width: 180px; }
+.pgrid tr.jrow td { background: var(--sunk); font-weight: 600; font-size: 12.5px; text-align: left; }
+.pm { display: inline-grid; place-items: center; min-width: 26px; height: 22px; padding: 0 6px; border-radius: 5px; font: 700 12px/1 var(--body); }
+.pm.ok { color: var(--good); background: var(--good-bg); }
+.pm.missing, .pm.wrong { color: var(--bad); background: var(--bad-bg); }
+.pm.fired { color: var(--muted); background: var(--sunk); }
+.pm.none, .pm.unchecked, .pm.skipped { color: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--muted); }
+.legend span { display: inline-flex; gap: 6px; align-items: center; }
+.fix-problem { margin: 0; }
+.fix-action { margin: 0; }
+.fix-action b { font-weight: 600; }
+details.code > summary { cursor: pointer; font-size: 12.5px; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
 .steps { display: grid; gap: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 details.step { border-top: 1px solid var(--line); background: var(--surface); }
 details.step:first-child { border-top: 0; }
@@ -220,6 +237,16 @@ details.plain > summary { cursor: pointer; font-weight: 600; }
         <button class="ghost" id="copyDev" type="button">Copy for developer</button>
       </div>
     </div>
+    <div class="eyebrow">Platform check</div>
+    <div class="tablewrap"><table class="pgrid" id="pgrid"></table></div>
+    <div class="legend">
+      <span><i class="pm ok">✓</i>fired as expected</span>
+      <span><i class="pm missing">✗</i>should fire but did not</span>
+      <span><i class="pm wrong">!</i>fired but should not</span>
+      <span><i class="pm fired">•</i>fired, not required</span>
+      <span><i class="pm none">–</i>not required</span>
+    </div>
+    <div class="eyebrow">What to fix</div>
     <div class="lanes" id="lanes"></div>
     <div id="fixPanel"></div>
     <div class="eyebrow">Step by step</div>
@@ -464,9 +491,9 @@ details.plain > summary { cursor: pointer; font-weight: 600; }
     for (const j of result.journeys || []) for (const s of j.steps || []) for (const i of s.issues || []) for (const f of i.fixes || []) {
       if (!LANES.find(l => l.id === f.lane)) continue;
       const list = byLane[f.lane] = byLane[f.lane] || [];
-      const key = f.text + (f.code || '');
+      const key = (f.problem || f.text) + (f.action || '') + (f.code || '');
       let entry = list.find(x => x.key === key);
-      if (!entry) list.push(entry = { key, text: f.text, code: f.code, steps: [] });
+      if (!entry) list.push(entry = { key, problem: f.problem || f.text, action: f.action || '', code: f.code, steps: [] });
       if (!entry.steps.includes(s.name)) entry.steps.push(s.name);
     }
     return byLane;
@@ -486,12 +513,28 @@ details.plain > summary { cursor: pointer; font-weight: 600; }
     const { result, fixes, reportMd, runUrl, id } = current;
     const j0 = (result.journeys || [])[0] || {};
     $('resMode').textContent = `${result.mode === 'page_audit' ? 'Page audit' : 'Journey'} · ${(result.env || '').toUpperCase()} · ${result.ran_at ? new Date(result.ran_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : ''}`;
-    $('resTitle').textContent = j0.name || 'Run';
+    $('resTitle').textContent = (result.journeys || []).length > 1 ? `${j0.name} + ${result.journeys.length - 1} more` : (j0.name || 'Run');
     const fullUrl = result.url || j0.start_url || '';
     let shortUrl = fullUrl; try { const u = new URL(fullUrl); shortUrl = u.origin + u.pathname; } catch {}
     $('resUrl').textContent = shortUrl; $('resUrl').title = fullUrl;
     const pill = $('resPill'); pill.className = `pill ${result.status}`; pill.textContent = STATUS_LABEL[result.status] || result.status;
     $('rawLink').href = runUrl || `https://github.com/${OWNER}/${REPO}/actions`;
+
+    // platform grid: one row per step, one column per platform
+    const PM = { ok: ['ok', '✓'], missing: ['missing', '✗'], wrong: ['wrong', '!'], fired: ['fired', '•'], none: ['none', '–'], unchecked: ['unchecked', '?'] };
+    const grid = $('pgrid'); grid.replaceChildren(el('tr', {}, el('th', {}, 'Step'), ...Object.values(DEST).map(n => el('th', {}, n))));
+    const many = (result.journeys || []).length > 1;
+    for (const j of result.journeys || []) {
+      if (many) grid.append(el('tr', { class: 'jrow' }, el('td', { colspan: '6' }, j.name)));
+      for (const st of j.steps || []) {
+        const pf = (st.observed && st.observed.platforms) || {};
+        grid.append(el('tr', {}, el('td', {}, st.name), ...Object.keys(DEST).map(d => {
+          if (st.status === 'skipped') return el('td', {}, el('span', { class: 'pm skipped', title: st.reason || 'skipped' }, '·'));
+          const [cls, mark] = PM[pf[d]] || PM.none;
+          return el('td', {}, el('span', { class: `pm ${cls}`, title: `${DEST[d]}: ${cls}` }, mark));
+        })));
+      }
+    }
 
     // lane buttons
     const lanes = $('lanes'); lanes.replaceChildren();
@@ -511,8 +554,11 @@ details.plain > summary { cursor: pointer; font-weight: 600; }
       const lane = LANES.find(l => l.id === activeLane);
       const ol = el('ol', { class: 'fixes', style: `--lc:${lane.color}` });
       for (const f of fixes[activeLane]) {
-        const body = el('div', { class: 'fix-body' }, el('div', { class: 'fix-where' }, stepsLabel(f.steps)), el('p', { class: 'fix-text' }, inline(f.text)));
-        if (f.code) body.append(el('div', { class: 'codebox' }, el('pre', {}, f.code), el('button', { type: 'button', onclick: () => copy(f.code, 'Code copied') }, 'Copy')));
+        const body = el('div', { class: 'fix-body' }, el('div', { class: 'fix-where' }, stepsLabel(f.steps)),
+          el('p', { class: 'fix-problem' }, inline(f.problem)),
+          f.action ? el('p', { class: 'fix-action' }, el('b', {}, 'Do this: '), inline(f.action)) : null);
+        if (f.code) body.append(el('details', { class: 'code' }, el('summary', {}, 'Show code for the developer'),
+          el('div', { class: 'codebox' }, el('pre', {}, f.code), el('button', { type: 'button', onclick: () => copy(f.code, 'Code copied') }, 'Copy'))));
         ol.append(el('li', {}, body));
       }
       panel.append(ol);
@@ -602,7 +648,7 @@ details.plain > summary { cursor: pointer; font-weight: 600; }
       if (!list.length) continue;
       out.push(lane === 'dev' ? 'DEVELOPER' : lane === 'gtm' ? 'GOOGLE TAG MANAGER' : 'JOURNEY CHANGED', '');
       list.forEach((f, k) => {
-        out.push(`${k + 1}. [${stepsLabel(f.steps)}] ${plain(f.text)}`);
+        out.push(`${k + 1}. ${stepsLabel(f.steps)}`, `   Problem: ${plain(f.problem)}`, ...(f.action ? [`   Do this: ${plain(f.action)}`] : []));
         if (f.code) out.push('', f.code.split('\n').map(l => '    ' + l).join('\n'));
         out.push('');
       });
