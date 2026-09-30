@@ -436,13 +436,15 @@ details.plain > summary { cursor: pointer; font-weight: 600; }
       } else if (run && run.status === 'completed' && run.conclusion === 'success' && ++donePolls >= 4) {
         // the run finished but its results are not readable: say why instead of waiting
         stop();
-        const branch = await gh(`/repos/${OWNER}/${REPO}/branches/${RESULTS}`).catch(() => null);
+        // can this key read repo files at all? (journeys.yaml / README.md on main)
+        const canRead = await gh(`/repos/${OWNER}/${REPO}/contents/README.md?ref=${BRANCH}`).then(r => r.ok).catch(() => false);
+        const branch = canRead ? await gh(`/repos/${OWNER}/${REPO}/branches/${RESULTS}`).catch(() => null) : null;
         $('progressTitle').textContent = 'The check finished, but its results did not reach this page';
         $('progressHint').replaceChildren(
-          branch && branch.status === 404
-            ? 'The run could not save results to the "results" branch. In the repo go to Settings → Actions → General → Workflow permissions, choose "Read and write permissions", save, and run the check again. '
-            : branch && branch.status === 403
-              ? 'Your GitHub key cannot read the saved results. Edit the key and set Contents to Read-only (or higher) for TFP-Tracking. '
+          !canRead
+            ? 'Your GitHub key can start checks but cannot read files in TFP-Tracking. Open github.com/settings/personal-access-tokens, edit the "TFP Sentinel page" key, set Repository permissions → Contents to Read-only, and save. No new key is needed; reload this page afterwards. '
+            : branch && branch.status === 404
+              ? 'The run could not save results to the "results" branch. In the repo go to Settings → Actions → General → Workflow permissions, choose "Read and write permissions", save, and run the check again. '
               : 'Open the run and check the "Save results for the Sentinel page" step. ',
           el('a', { href: run.html_url, target: '_blank', rel: 'noopener' }, 'Open the run'));
       } else if (run && run.status === 'completed' && run.conclusion !== 'success') {
@@ -643,6 +645,11 @@ details.plain > summary { cursor: pointer; font-weight: 600; }
     if (last && !$('urlInput').value) $('urlInput').value = last;
     await loadJourneys().catch(() => {});
     hintFor();
+    const canRead = await gh(`/repos/${OWNER}/${REPO}/contents/README.md?ref=${BRANCH}`).then(r => r.ok).catch(() => false);
+    if (!canRead) {
+      $('runError').textContent = 'Your GitHub key can start checks but cannot read their results. Open github.com/settings/personal-access-tokens, edit the "TFP Sentinel page" key, set Repository permissions → Contents to Read-only, save, then reload this page.';
+      $('runError').hidden = false;
+    }
     const idx = await loadHistory().catch(() => null);
     if (idx && idx.length) pick(idx[0]);   // open on the latest check
   }
