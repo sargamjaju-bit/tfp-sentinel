@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>TFP Tracking Sentinel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&family=Noto+Sans+Mono:wght@400;500&family=Noto+Serif:wght@600;700&display=swap">
+<style>
+/* Layout: one working column. Check a page -> live progress -> fixes by lane -> step evidence -> history. */
+:root {
+  --bg: #F5F5F9;
+  --surface: #FFFFFF;
+  --sunk: #EEEFF5;
+  --ink: #2B2D42;          /* TFP Deep Indigo */
+  --muted: #5F627A;
+  --line: #DFE0EA;
+  --primary: #2B2D42;
+  --on-primary: #FFFFFF;
+  --focus: #5A5FCF;
+  --good: #1E7F55;  --good-bg: #E3F4EB;
+  --warn: #9A6412;  --warn-bg: #FBF0DC;
+  --bad:  #B3372F;  --bad-bg:  #FBE6E4;
+  --lane-dev: #4B50B8;
+  --lane-gtm: #0E7482;
+  --lane-campaign: #9A6412;
+  --lane-contract: #B3372F;
+  --code-bg: #F0F1F7;
+  --display: "Noto Serif", Georgia, "Times New Roman", serif;
+  --body: "Noto Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Noto Sans Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15161E; --surface: #1D1F2B; --sunk: #242736; --ink: #E8E9F2; --muted: #A0A3BC; --line: #33364A;
+    --primary: #C7CAF5; --on-primary: #1B1C28; --focus: #9DA2F0;
+    --good: #6CCB9C; --good-bg: #173327; --warn: #E3B35E; --warn-bg: #3A2D14; --bad: #F08A80; --bad-bg: #3D1C1A;
+    --lane-dev: #A3A7F2; --lane-gtm: #6FC6D1; --lane-campaign: #E3B35E; --lane-contract: #F08A80; --code-bg: #242736;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #15161E; --surface: #1D1F2B; --sunk: #242736; --ink: #E8E9F2; --muted: #A0A3BC; --line: #33364A;
+  --primary: #C7CAF5; --on-primary: #1B1C28; --focus: #9DA2F0;
+  --good: #6CCB9C; --good-bg: #173327; --warn: #E3B35E; --warn-bg: #3A2D14; --bad: #F08A80; --bad-bg: #3D1C1A;
+  --lane-dev: #A3A7F2; --lane-gtm: #6FC6D1; --lane-campaign: #E3B35E; --lane-contract: #F08A80; --code-bg: #242736;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+/* single-column grids: let long code scroll inside its box instead of widening the page */
+.wrap, .card, ol.fixes, .fix-body, .step-body, .steps, .progress { grid-template-columns: minmax(0, 1fr); }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.55 var(--body); padding-inline: 16px; padding-block: 0 48px; }
+.wrap { max-width: 900px; margin: 0 auto; display: grid; gap: 20px; }
+header.top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding-block: 28px 4px; border-bottom: 1px solid var(--line); }
+header.top h1 { font: 700 26px/1.2 var(--display); margin: 0; letter-spacing: -0.01em; }
+header.top p { margin: 0; color: var(--muted); font-size: 13px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px; display: grid; gap: 14px; min-width: 0; }
+.card h2 { font: 600 17px/1.3 var(--display); margin: 0; }
+.eyebrow { font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+label { font-weight: 600; font-size: 13.5px; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+input[type="url"], input[type="password"], input[type="text"] {
+  width: 100%; min-width: 0; font: 14px/1.4 var(--mono); color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 8px; padding: 11px 12px;
+}
+input:focus-visible, button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.url-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
+@media (max-width: 560px) { .url-row { grid-template-columns: 1fr; } }
+button { font: 600 14px/1 var(--body); border-radius: 8px; padding: 12px 18px; cursor: pointer; border: 1px solid transparent; }
+button.primary { background: var(--primary); color: var(--on-primary); }
+button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+button.ghost { background: transparent; color: var(--ink); border-color: var(--line); padding: 9px 13px; font-weight: 500; }
+button.ghost:hover { background: var(--sunk); }
+button.link { background: none; border: 0; padding: 0; color: var(--muted); font-weight: 500; text-decoration: underline; font-size: 13px; }
+.hint { color: var(--muted); font-size: 13px; margin: 0; }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip { font: 500 12.5px/1 var(--body); padding: 7px 10px; border-radius: 999px; background: var(--sunk); color: var(--ink); border: 1px solid var(--line); cursor: pointer; }
+.chip:hover { border-color: var(--muted); }
+.pill { display: inline-flex; align-items: center; gap: 6px; font: 600 12px/1 var(--body); padding: 6px 10px; border-radius: 999px; white-space: nowrap; }
+.pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.pill.pass { color: var(--good); background: var(--good-bg); }
+.pill.warn { color: var(--warn); background: var(--warn-bg); }
+.pill.fail, .pill.error { color: var(--bad); background: var(--bad-bg); }
+.pill.skipped, .pill.running { color: var(--muted); background: var(--sunk); }
+.progress { display: grid; gap: 10px; }
+.stages { display: flex; gap: 6px; flex-wrap: wrap; font-size: 13px; }
+.stage { padding: 6px 10px; border-radius: 6px; background: var(--sunk); color: var(--muted); }
+.stage.on { background: var(--primary); color: var(--on-primary); }
+.stage.done { color: var(--good); background: var(--good-bg); }
+.bar { height: 4px; background: var(--sunk); border-radius: 2px; overflow: hidden; }
+.bar i { display: block; height: 100%; width: 30%; background: var(--primary); animation: slide 1.6s ease-in-out infinite; }
+@keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(340%); } }
+@media (prefers-reduced-motion: reduce) { .bar i { animation: none; width: 100%; opacity: 0.4; } }
+.result-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
+.result-head .meta { min-width: 0; display: grid; gap: 4px; }
+.result-head .url { font: 13px/1.4 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+.result-head h2 { font-size: 20px; }
+.lanes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 640px) { .lanes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.lane-btn { text-align: left; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: grid; gap: 2px; color: var(--ink); font-weight: 500; }
+.lane-btn b { font: 700 22px/1.1 var(--body); font-variant-numeric: tabular-nums; }
+.lane-btn span { font-size: 12.5px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.lane-btn span::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--lc); }
+.lane-btn[aria-pressed="true"] { border-color: var(--lc); box-shadow: inset 0 0 0 1px var(--lc); background: var(--surface); }
+.lane-btn:disabled { opacity: 0.45; cursor: default; }
+ol.fixes { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; counter-reset: fix; }
+ol.fixes > li { counter-increment: fix; display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 4px 10px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+ol.fixes > li:last-child { border-bottom: 0; padding-bottom: 0; }
+ol.fixes > li::before { content: counter(fix); font: 700 13px/1 var(--body); color: var(--on-primary); background: var(--lc, var(--primary)); width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; margin-top: 1px; }
+.fix-body { min-width: 0; display: grid; gap: 8px; }
+.fix-where { font-size: 12px; color: var(--muted); font-weight: 600; }
+.fix-text { margin: 0; }
+code { font: 0.9em/1.4 var(--mono); background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+.codebox { position: relative; }
+.codebox pre { margin: 0; background: var(--code-bg); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font: 12.5px/1.55 var(--mono); }
+.codebox button { position: absolute; top: 6px; right: 6px; padding: 5px 9px; font-size: 12px; background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
+.steps { display: grid; gap: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+details.step { border-top: 1px solid var(--line); background: var(--surface); }
+details.step:first-child { border-top: 0; }
+details.step summary { list-style: none; cursor: pointer; padding: 12px 14px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+details.step summary::-webkit-details-marker { display: none; }
+details.step summary .name { font-weight: 600; min-width: 0; }
+details.step summary .count { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+details.step[open] summary { background: var(--sunk); }
+.step-body { padding: 12px 14px 16px; display: grid; gap: 12px; min-width: 0; }
+.kv { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 6px 12px; font-size: 13.5px; }
+@media (max-width: 520px) { .kv { grid-template-columns: 1fr; } }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.tag { font: 12px/1.3 var(--mono); padding: 3px 7px; border-radius: 5px; background: var(--sunk); border: 1px solid var(--line); overflow-wrap: anywhere; }
+.tag b { font-family: var(--body); font-weight: 600; }
+.finding { font-size: 13.5px; padding-left: 10px; border-left: 3px solid var(--lc, var(--line)); }
+.shot { max-width: 100%; border: 1px solid var(--line); border-radius: 6px; display: block; }
+.shot-ph { font-size: 12.5px; color: var(--muted); }
+table.history { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+table.history th { text-align: left; font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+table.history td { padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.history tr.clickable { cursor: pointer; }
+table.history tr.clickable:hover td { background: var(--sunk); }
+table.history .u { font: 12.5px/1.4 var(--mono); overflow-wrap: anywhere; min-width: 190px; }
+.tablewrap { overflow-x: auto; }
+.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.error-box { background: var(--bad-bg); color: var(--bad); border-radius: 8px; padding: 10px 12px; font-size: 13.5px; }
+.setup ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.summary-md { font-size: 14px; }
+.summary-md h1, .summary-md h2, .summary-md h3 { font-family: var(--display); font-size: 16px; margin: 14px 0 6px; }
+.summary-md table { border-collapse: collapse; font-size: 13px; }
+.summary-md td, .summary-md th { border: 1px solid var(--line); padding: 4px 8px; text-align: left; vertical-align: top; }
+.summary-md pre { background: var(--code-bg); padding: 10px; border-radius: 6px; overflow-x: auto; font: 12.5px/1.5 var(--mono); }
+details.plain > summary { cursor: pointer; font-weight: 600; }
+.toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-size: 13.5px; z-index: 5; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Tracking Sentinel</h1>
+    <p>Thefynprint · checks which tags fire on every step, then tells you what to fix</p>
+  </header>
+
+  <!-- one-time setup -->
+  <section class="card setup" id="setup" hidden>
+    <div class="eyebrow">One-time setup</div>
+    <h2>Connect this page to the TFP-Tracking repo</h2>
+    <ol>
+      <li>Open <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">GitHub → new fine-grained token</a>.</li>
+      <li>Name it <code>TFP Sentinel page</code> and set <b>Expiration</b> to one year.</li>
+      <li><b>Repository access:</b> Only select repositories → <code>TFP-Tracking</code>.</li>
+      <li><b>Permissions → Repository:</b> Actions = <i>Read and write</i>, Contents = <i>Read-only</i>.</li>
+      <li>Generate it, copy it, and paste it below. It stays in this browser only.</li>
+    </ol>
+    <form id="tokenForm" class="url-row">
+      <input id="tokenInput" type="password" autocomplete="off" placeholder="github_pat_..." aria-label="GitHub token">
+      <button class="primary" type="submit">Connect</button>
+    </form>
+    <div id="setupError" class="error-box" hidden></div>
+  </section>
+
+  <!-- check a page -->
+  <section class="card" id="runCard">
+    <div class="eyebrow">Check a page</div>
+    <form id="runForm" class="url-row">
+      <input id="urlInput" type="url" required placeholder="https://uat.thefynprint.com/global-portfolio-factsheet" aria-label="Page URL">
+      <button id="runBtn" class="primary" type="submit">Run check</button>
+    </form>
+    <p class="hint" id="urlHint">Paste a TFP page. UAT links run the full journey, including a test sign-up. Live links never submit forms.</p>
+    <div class="chips" id="journeyChips"></div>
+    <div id="runError" class="error-box" hidden></div>
+  </section>
+
+  <!-- progress -->
+  <section class="card progress" id="progressCard" hidden>
+    <div class="row" style="justify-content:space-between">
+      <h2 id="progressTitle">Checking…</h2>
+      <span class="num hint" id="elapsed">0:00</span>
+    </div>
+    <div class="bar"><i></i></div>
+    <div class="stages">
+      <span class="stage" data-stage="queued">Queued</span>
+      <span class="stage" data-stage="running">Walking the journey</span>
+      <span class="stage" data-stage="saving">Writing fixes</span>
+    </div>
+    <p class="hint" id="progressHint">Usually 2 to 4 minutes. You can leave this page open; results appear here.</p>
+  </section>
+
+  <!-- result -->
+  <section class="card" id="resultCard" hidden>
+    <div class="result-head">
+      <div class="meta">
+        <div class="eyebrow" id="resMode"></div>
+        <h2 id="resTitle"></h2>
+        <div class="url" id="resUrl"></div>
+      </div>
+      <div class="row">
+        <span class="pill" id="resPill"></span>
+        <button class="ghost" id="copyDev" type="button">Copy for developer</button>
+      </div>
+    </div>
+    <div class="lanes" id="lanes"></div>
+    <div id="fixPanel"></div>
+    <div class="eyebrow">Step by step</div>
+    <div class="steps" id="steps"></div>
+    <details class="plain" id="summaryWrap" hidden>
+      <summary id="summaryLabel">Written summary</summary>
+      <div class="summary-md" id="summaryMd"></div>
+    </details>
+    <p class="hint">Raw run on GitHub: <a id="rawLink" href="#" target="_blank" rel="noopener">open</a></p>
+  </section>
+
+  <!-- history -->
+  <section class="card" id="historyCard" hidden>
+    <div class="row" style="justify-content:space-between">
+      <h2>Recent checks</h2>
+      <button class="ghost" id="refreshHistory" type="button">Refresh</button>
+    </div>
+    <div class="tablewrap"><table class="history">
+      <thead><tr><th>When</th><th>Page</th><th>Result</th><th class="num">Dev</th><th class="num">GTM</th></tr></thead>
+      <tbody id="historyBody"></tbody>
+    </table></div>
+  </section>
+
+  <p class="hint">Connected to <code id="repoName"></code> · <button class="link" id="forget" type="button">Disconnect this browser</button></p>
+</div>
+
+<script>
+(() => {
+  const OWNER = 'sargamjaju-bit', REPO = 'TFP-Tracking', WORKFLOW = 'sentinel.yml', BRANCH = 'main', RESULTS = 'results';
+  const LANES = [
+    { id: 'contract', label: 'Journey changed', color: 'var(--lane-contract)' },
+    { id: 'dev', label: 'Dev', color: 'var(--lane-dev)' },
+    { id: 'gtm', label: 'GTM', color: 'var(--lane-gtm)' },
+    { id: 'campaign', label: 'Campaign', color: 'var(--lane-campaign)' },
+  ];
+  const DEST = { ga4: 'GA4', meta: 'Meta', google_ads: 'Google Ads', linkedin: 'LinkedIn', x: 'X' };
+  const STATUS_LABEL = { pass: 'All good', warn: 'Worth a look', fail: 'Tracking broken', error: 'Run failed', skipped: 'Skipped', running: 'Running' };
+
+  const $ = id => document.getElementById(id);
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+    del(k) { try { localStorage.removeItem(k); } catch {} },
+  };
+  let token = store.get('tfp-sentinel-token');
+  let journeys = [];
+  let current = null;       // { result, reportMd, id, runUrl }
+  let activeLane = null;
+  let pollTimer = null, clockTimer = null;
+  $('repoName').textContent = `${OWNER}/${REPO}`;
+
+  function el(tag, attrs = {}, ...kids) {
+    const e = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (v == null || v === false) continue;
+      if (k === 'class') e.className = v;
+      else if (k === 'style') e.setAttribute('style', v);
+      else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+      else e.setAttribute(k, v === true ? '' : v);
+    }
+    for (const kid of kids.flat()) if (kid != null && kid !== false) e.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+    return e;
+  }
+  // **bold** and `code` only; everything else is text
+  function inline(text) {
+    const frag = document.createDocumentFragment();
+    const re = /(\*\*[^*]+\*\*|`[^`]+`)/g;
+    let last = 0, m;
+    while ((m = re.exec(text))) {
+      if (m.index > last) frag.append(text.slice(last, m.index));
+      const t = m[0];
+      frag.append(t.startsWith('**') ? el('b', {}, t.slice(2, -2)) : el('code', {}, t.slice(1, -1)));
+      last = m.index + t.length;
+    }
+    if (last < text.length) frag.append(text.slice(last));
+    return frag;
+  }
+  function toast(msg) {
+    const t = el('div', { class: 'toast', role: 'status' }, msg);
+    document.body.append(t);
+    setTimeout(() => t.remove(), 2200);
+  }
+  async function copy(text, done = 'Copied') {
+    try { await navigator.clipboard.writeText(text); toast(done); }
+    catch {
+      const ta = el('textarea', { style: 'position:fixed;opacity:0' }); ta.value = text; document.body.append(ta); ta.select();
+      try { document.execCommand('copy'); toast(done); } catch { toast('Select the text and copy it manually'); }
+      ta.remove();
+    }
+  }
+
+  // ---------- GitHub API ----------
+  async function gh(path, opts = {}) {
+    const res = await fetch(`https://api.github.com${path}`, {
+      ...opts, cache: 'no-store',
+      headers: { Authorization: `Bearer ${token}`, Accept: opts.accept || 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', ...(opts.body ? { 'Content-Type': 'application/json' } : {}) },
+    });
+    return res;
+  }
+  async function raw(path, ref, as = 'json') {
+    const res = await gh(`/repos/${OWNER}/${REPO}/contents/${path}?ref=${ref}`, { accept: 'application/vnd.github.raw+json' });
+    if (!res.ok) return null;
+    return as === 'json' ? res.json() : as === 'blob' ? res.blob() : res.text();
+  }
+  function explain(status) {
+    if (status === 401) return 'GitHub did not accept the token. It may have expired or been copied incompletely. Disconnect and paste a new one.';
+    if (status === 403) return 'The token can see the repo but lacks a permission. It needs Actions: Read and write, and Contents: Read-only.';
+    if (status === 404) return `GitHub could not find ${OWNER}/${REPO} with this token. Check that the token has access to TFP-Tracking.`;
+    return `GitHub answered with an error (${status}). Try again in a minute.`;
+  }
+
+  // ---------- setup ----------
+  async function connect(t) {
+    token = t;
+    const res = await gh(`/repos/${OWNER}/${REPO}`);
+    if (!res.ok) { token = null; throw new Error(explain(res.status)); }
+    store.set('tfp-sentinel-token', t);
+  }
+  $('tokenForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const t = $('tokenInput').value.trim();
+    $('setupError').hidden = true;
+    if (!t) return;
+    try { await connect(t); $('tokenInput').value = ''; start(); }
+    catch (err) { $('setupError').textContent = err.message; $('setupError').hidden = false; }
+  });
+  $('forget').addEventListener('click', () => { store.del('tfp-sentinel-token'); token = null; location.reload(); });
+
+  // ---------- journeys from the contract ----------
+  async function loadJourneys() {
+    let yaml = await raw('journeys.yaml', BRANCH, 'text');
+    if (!yaml) yaml = await raw('contract/journeys.yaml', BRANCH, 'text');
+    journeys = [];
+    if (!yaml) return;
+    let cur = null;
+    for (const line of yaml.split('\n')) {
+      let m;
+      if ((m = line.match(/^\s{2}- id:\s*(\S+)/))) { cur = { id: m[1], steps: 0 }; journeys.push(cur); }
+      else if (cur && (m = line.match(/^\s{4}name:\s*(.+)$/))) cur.name = m[1].trim();
+      else if (cur && (m = line.match(/^\s{4}start_path:\s*(\S+)/))) cur.path = m[1];
+      else if (cur && /^\s{6}- id:/.test(line)) cur.steps++;
+    }
+    const chips = $('journeyChips');
+    chips.replaceChildren();
+    for (const j of journeys.filter(j => j.path)) {
+      chips.append(el('button', { class: 'chip', type: 'button', onclick: () => { $('urlInput').value = `https://uat.thefynprint.com${j.path}`; hintFor(); $('urlInput').focus(); } }, `${j.name} (UAT)`));
+    }
+  }
+  function hintFor() {
+    const v = $('urlInput').value.trim();
+    let u; try { u = new URL(/^https?:\/\//.test(v) ? v : `https://${v}`); } catch { $('urlInput').setCustomValidity(''); $('urlHint').textContent = 'Paste a TFP page. UAT links run the full journey, including a test sign-up. Live links never submit forms.'; return; }
+    const uat = /^(www\.)?uat\./.test(u.hostname);
+    const j = journeys.find(x => x.path && x.path.replace(/\/$/, '') === u.pathname.replace(/\/$/, ''));
+    const what = j ? `Runs the "${j.name}" journey (${j.steps} steps)` : 'Not a journey in the contract: checks the page-load tags, then clicks each button on the page';
+    const where = uat ? 'UAT: forms are submitted with the test account.' : 'Live: nothing is submitted.';
+    $('urlHint').textContent = `${what}. ${where} Every tag hit is recorded and blocked, so nothing reaches GA4 or the ad platforms.`;
+  }
+  $('urlInput').addEventListener('input', hintFor);
+
+  // ---------- run ----------
+  $('runForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    let v = $('urlInput').value.trim();
+    if (!/^https?:\/\//.test(v)) v = `https://${v}`;
+    $('runError').hidden = true;
+    const id = 'r' + Date.now().toString(36);
+    $('runBtn').disabled = true;
+    const res = await gh(`/repos/${OWNER}/${REPO}/actions/workflows/${WORKFLOW}/dispatches`, {
+      method: 'POST', body: JSON.stringify({ ref: BRANCH, inputs: { url: v, request: id } }),
+    }).catch(() => null);
+    if (!res || res.status !== 204) {
+      $('runBtn').disabled = false;
+      $('runError').textContent = res ? (res.status === 422 ? 'GitHub rejected the run. Make sure the updated sentinel.yml (with the URL box) is in .github/workflows.' : explain(res.status)) : 'Could not reach GitHub. Check your connection.';
+      $('runError').hidden = false;
+      return;
+    }
+    store.set('tfp-sentinel-last-url', v);
+    track(id, v);
+  });
+
+  function setStage(stage) {
+    const order = ['queued', 'running', 'saving'];
+    for (const s of document.querySelectorAll('.stage')) {
+      const i = order.indexOf(s.dataset.stage), k = order.indexOf(stage);
+      s.className = 'stage' + (i < k ? ' done' : i === k ? ' on' : '');
+    }
+  }
+  function track(id, url) {
+    clearInterval(pollTimer); clearInterval(clockTimer);
+    $('progressCard').hidden = false;
+    $('progressTitle').textContent = `Checking ${new URL(url).pathname}`;
+    $('progressHint').textContent = 'Usually 2 to 4 minutes. You can leave this page open; results appear here.';
+    setStage('queued');
+    const t0 = Date.now();
+    clockTimer = setInterval(() => {
+      const s = Math.floor((Date.now() - t0) / 1000);
+      $('elapsed').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    }, 1000);
+    let runUrl = null;
+    const tick = async () => {
+      if (Date.now() - t0 > 25 * 60 * 1000) { stop(); $('progressTitle').textContent = 'This is taking longer than expected'; $('progressHint').textContent = 'Open the run on GitHub to see where it stopped.'; return; }
+      const runs = await gh(`/repos/${OWNER}/${REPO}/actions/workflows/${WORKFLOW}/runs?event=workflow_dispatch&per_page=10`).then(r => r.ok ? r.json() : null).catch(() => null);
+      const run = runs && runs.workflow_runs.find(r => (r.display_title || r.name || '').includes(id));
+      if (run) {
+        runUrl = run.html_url;
+        setStage(run.status === 'queued' ? 'queued' : run.status === 'completed' ? 'saving' : 'running');
+      }
+      const result = await raw(`runs/${id}/result.json`, RESULTS).catch(() => null);
+      if (result) {
+        stop();
+        $('progressCard').hidden = true;
+        await openRun(id, result, runUrl);
+        loadHistory();
+      } else if (run && run.status === 'completed' && run.conclusion !== 'success') {
+        stop();
+        $('progressTitle').textContent = 'The check could not finish';
+        $('progressHint').replaceChildren('GitHub stopped the run before results were saved. ', el('a', { href: run.html_url, target: '_blank', rel: 'noopener' }, 'Open the run'), ' to see why.');
+      }
+    };
+    const stop = () => { clearInterval(pollTimer); clearInterval(clockTimer); $('runBtn').disabled = false; };
+    tick();
+    pollTimer = setInterval(tick, 8000);
+  }
+
+  // ---------- render a result ----------
+  function collectFixes(result) {
+    const byLane = {};
+    for (const j of result.journeys || []) for (const s of j.steps || []) for (const i of s.issues || []) for (const f of i.fixes || []) {
+      if (!LANES.find(l => l.id === f.lane)) continue;
+      const list = byLane[f.lane] = byLane[f.lane] || [];
+      const key = f.text + (f.code || '');
+      let entry = list.find(x => x.key === key);
+      if (!entry) list.push(entry = { key, text: f.text, code: f.code, steps: [] });
+      if (!entry.steps.includes(s.name)) entry.steps.push(s.name);
+    }
+    return byLane;
+  }
+  function stepsLabel(steps) { return steps.length > 2 ? `${steps.length} steps: ${steps.slice(0, 2).join(', ')} and more` : steps.join(', '); }
+
+  async function openRun(id, result, runUrl) {
+    const reportMd = await raw(`runs/${id}/report.md`, RESULTS, 'text').catch(() => null);
+    if (!runUrl) runUrl = (await raw(`runs/${id}/run_url.txt`, RESULTS, 'text').catch(() => null) || '').trim() || null;
+    current = { id, result, reportMd, runUrl, fixes: collectFixes(result) };
+    render();
+    $('resultCard').hidden = false;
+    $('resultCard').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+  }
+
+  function render() {
+    const { result, fixes, reportMd, runUrl, id } = current;
+    const j0 = (result.journeys || [])[0] || {};
+    $('resMode').textContent = `${result.mode === 'page_audit' ? 'Page audit' : 'Journey'} · ${(result.env || '').toUpperCase()} · ${result.ran_at ? new Date(result.ran_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : ''}`;
+    $('resTitle').textContent = j0.name || 'Run';
+    const fullUrl = result.url || j0.start_url || '';
+    let shortUrl = fullUrl; try { const u = new URL(fullUrl); shortUrl = u.origin + u.pathname; } catch {}
+    $('resUrl').textContent = shortUrl; $('resUrl').title = fullUrl;
+    const pill = $('resPill'); pill.className = `pill ${result.status}`; pill.textContent = STATUS_LABEL[result.status] || result.status;
+    $('rawLink').href = runUrl || `https://github.com/${OWNER}/${REPO}/actions`;
+
+    // lane buttons
+    const lanes = $('lanes'); lanes.replaceChildren();
+    const firstWithFixes = LANES.find(l => (fixes[l.id] || []).length);
+    if (!activeLane || !(fixes[activeLane] || []).length) activeLane = firstWithFixes ? firstWithFixes.id : null;
+    for (const l of LANES) {
+      const n = (fixes[l.id] || []).length;
+      lanes.append(el('button', { class: 'lane-btn', type: 'button', style: `--lc:${l.color}`, 'aria-pressed': String(activeLane === l.id), disabled: !n, onclick: () => { activeLane = l.id; render(); } },
+        el('b', {}, n), el('span', {}, n === 1 ? `${l.label} fix` : `${l.label} fixes`)));
+    }
+
+    // fixes for the active lane
+    const panel = $('fixPanel'); panel.replaceChildren();
+    if (!activeLane) {
+      panel.append(el('p', { class: 'hint' }, result.status === 'pass' ? 'Every step fired what the contract expects. Nothing to fix.' : 'No fixes were generated for this run. See the steps below.'));
+    } else {
+      const lane = LANES.find(l => l.id === activeLane);
+      const ol = el('ol', { class: 'fixes', style: `--lc:${lane.color}` });
+      for (const f of fixes[activeLane]) {
+        const body = el('div', { class: 'fix-body' }, el('div', { class: 'fix-where' }, stepsLabel(f.steps)), el('p', { class: 'fix-text' }, inline(f.text)));
+        if (f.code) body.append(el('div', { class: 'codebox' }, el('pre', {}, f.code), el('button', { type: 'button', onclick: () => copy(f.code, 'Code copied') }, 'Copy')));
+        ol.append(el('li', {}, body));
+      }
+      panel.append(ol);
+    }
+
+    // steps
+    const steps = $('steps'); steps.replaceChildren();
+    for (const j of result.journeys || []) for (const s of j.steps || []) {
+      const n = (s.issues || []).length;
+      const sum = el('summary', {}, el('span', { class: `pill ${s.status}` }, s.status === 'skipped' ? 'Skipped' : s.status === 'pass' ? 'OK' : s.status === 'warn' ? 'Check' : 'Broken'),
+        el('span', { class: 'name' }, s.name), el('span', { class: 'count' }, s.status === 'skipped' ? '' : n ? `${n} finding${n > 1 ? 's' : ''}` : ''));
+      const body = el('div', { class: 'step-body' });
+      if (s.status === 'skipped') body.append(el('p', { class: 'hint' }, s.reason || 'Not run.'));
+      else {
+        const obs = s.observed || {};
+        const tagEls = Object.entries(obs.hits || {}).map(([d, evs]) => el('span', { class: 'tag' }, el('b', {}, DEST[d] || d), ' ', evs.join(', ')));
+        const dl = el('dl', { class: 'kv' },
+          el('dt', {}, 'Site pushed'), el('dd', {}, (obs.datalayer_events || []).length ? obs.datalayer_events.map(e => el('span', { class: 'tag' }, e)) : el('span', { class: 'hint' }, 'nothing')),
+          el('dt', {}, 'Tags that fired'), el('dd', {}, tagEls.length ? tagEls : el('span', { class: 'hint' }, 'none')));
+        if (obs.outbound_url) dl.append(el('dt', {}, 'Link went to'), el('dd', {}, el('span', { class: 'tag' }, obs.outbound_url)));
+        body.append(dl);
+        for (const i of s.issues || []) {
+          const lane = LANES.find(l => l.id === (i.lane === 'journey_change' ? 'contract' : i.lane));
+          body.append(el('div', { class: 'finding', style: lane ? `--lc:${lane.color}` : '' }, inline(i.what)));
+        }
+        if (s.screenshot) {
+          const holder = el('div', {}, el('span', { class: 'shot-ph' }, 'Loading screenshot…'));
+          body.append(holder);
+          body.dataset.shot = s.screenshot;
+        }
+      }
+      const d = el('details', { class: 'step' }, sum, body);
+      d.addEventListener('toggle', async () => {
+        if (!d.open || !body.dataset.shot || body.dataset.loaded) return;
+        body.dataset.loaded = '1';
+        const holder = body.lastElementChild;
+        const blob = await raw(`runs/${id}/${body.dataset.shot}`, RESULTS, 'blob').catch(() => null);
+        holder.replaceChildren(blob ? el('img', { class: 'shot', alt: `Screenshot after: ${s.name}`, src: URL.createObjectURL(blob) }) : el('span', { class: 'shot-ph' }, 'No screenshot for this step.'));
+      });
+      if (s.status === 'fail' || s.status === 'warn') d.open = false;
+      steps.append(d);
+    }
+
+    // written summary (Gemini / Claude), when the run had a key
+    const wrote = reportMd && reportMd.match(/_Alert written by (\w+)/);
+    $('summaryWrap').hidden = !wrote;
+    if (wrote) {
+      $('summaryLabel').textContent = `Written summary (${wrote[1]})`;
+      $('summaryMd').replaceChildren(renderMd(reportMd.split('\n---\n')[0]));
+    }
+  }
+
+  // tiny markdown: headings, lists, tables, code blocks, paragraphs
+  function renderMd(md) {
+    const root = document.createDocumentFragment();
+    const lines = md.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (/^```/.test(line)) { const buf = []; i++; while (i < lines.length && !/^```/.test(lines[i])) buf.push(lines[i++]); root.append(el('pre', {}, buf.join('\n'))); continue; }
+      let m;
+      if ((m = line.match(/^(#{1,3})\s+(.*)/))) { root.append(el(`h${m[1].length}`, {}, inline(m[2]))); continue; }
+      if (/^\|/.test(line)) {
+        const rows = []; while (i < lines.length && /^\|/.test(lines[i])) rows.push(lines[i++]); i--;
+        const t = el('table');
+        rows.filter(r => !/^\|\s*-/.test(r)).forEach((r, k) => t.append(el('tr', {}, r.replace(/^\||\|$/g, '').split('|').map(c => el(k ? 'td' : 'th', {}, inline(c.trim().replace(/<br>/g, ' · ')))))));
+        root.append(el('div', { class: 'tablewrap' }, t)); continue;
+      }
+      if (/^\s*(\d+\.|-)\s+/.test(line)) {
+        const ordered = /^\s*\d+\./.test(line); const list = el(ordered ? 'ol' : 'ul');
+        while (i < lines.length && /^\s*(\d+\.|-)\s+/.test(lines[i])) list.append(el('li', {}, inline(lines[i++].replace(/^\s*(\d+\.|-)\s+/, ''))));
+        i--; root.append(list); continue;
+      }
+      if (line.trim()) root.append(el('p', {}, inline(line)));
+    }
+    return root;
+  }
+
+  // copy for developer: Dev + GTM fixes as plain text (WhatsApp / email friendly)
+  $('copyDev').addEventListener('click', () => {
+    if (!current) return;
+    const { result, fixes } = current;
+    const plain = s => s.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/`([^`]+)`/g, '$1');
+    const where = (() => { try { const u = new URL(result.url || ((result.journeys || [])[0] || {}).start_url); return u.origin + u.pathname; } catch { return 'TFP'; } })();
+    const out = [`Tracking fixes for ${where}`, `Checked ${new Date(result.ran_at || Date.now()).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}`, ''];
+    for (const lane of ['contract', 'dev', 'gtm']) {
+      const list = fixes[lane] || [];
+      if (!list.length) continue;
+      out.push(lane === 'dev' ? 'DEVELOPER' : lane === 'gtm' ? 'GOOGLE TAG MANAGER' : 'JOURNEY CHANGED', '');
+      list.forEach((f, k) => {
+        out.push(`${k + 1}. [${stepsLabel(f.steps)}] ${plain(f.text)}`);
+        if (f.code) out.push('', f.code.split('\n').map(l => '    ' + l).join('\n'));
+        out.push('');
+      });
+    }
+    if (out.length <= 3) out.push('Nothing to fix: every step fired as expected.');
+    copy(out.join('\n'), 'Fixes copied');
+  });
+
+  // ---------- history ----------
+  async function loadHistory() {
+    const idx = await raw('runs/index.json', RESULTS).catch(() => null);
+    const body = $('historyBody'); body.replaceChildren();
+    $('historyCard').hidden = false;
+    if (!idx || !idx.length) {
+      body.append(el('tr', {}, el('td', { colspan: '5', class: 'hint' }, 'No checks yet. Paste a page above and press Run check. Weekly live checks also appear here.')));
+      return null;
+    }
+    for (const r of idx.slice(0, 25)) {
+      const page = r.url ? (() => { try { const u = new URL(r.url); return `${u.hostname.replace(/^www\./, '')}${u.pathname}`; } catch { return r.url; } })() : (r.name || 'Contract journeys');
+      body.append(el('tr', { class: 'clickable', tabindex: '0', onclick: () => pick(r), onkeydown: e => { if (e.key === 'Enter') pick(r); } },
+        el('td', { class: 'num' }, new Date(r.ran_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })),
+        el('td', { class: 'u' }, page),
+        el('td', {}, el('span', { class: `pill ${r.status}` }, STATUS_LABEL[r.status] || r.status)),
+        el('td', { class: 'num' }, r.counts ? r.counts.dev : ''),
+        el('td', { class: 'num' }, r.counts ? r.counts.gtm : '')));
+    }
+    return idx;
+  }
+  async function pick(r) {
+    const result = await raw(`runs/${r.id}/result.json`, RESULTS);
+    if (result) openRun(r.id, result, r.run_url);
+  }
+  $('refreshHistory').addEventListener('click', loadHistory);
+
+  // ---------- start ----------
+  async function start() {
+    if (!token) { $('setup').hidden = false; $('runBtn').disabled = true; return; }
+    $('setup').hidden = true; $('runBtn').disabled = false;
+    const last = store.get('tfp-sentinel-last-url');
+    if (last && !$('urlInput').value) $('urlInput').value = last;
+    await loadJourneys().catch(() => {});
+    hintFor();
+    const idx = await loadHistory().catch(() => null);
+    if (idx && idx.length) pick(idx[0]);   // open on the latest check
+  }
+  start();
+})();
+</script>
+</body>
+</html>
