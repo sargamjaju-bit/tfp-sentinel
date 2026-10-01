@@ -262,7 +262,10 @@ details.plain > summary { cursor: pointer; font-weight: 600; }
   <section class="card" id="historyCard" hidden>
     <div class="row" style="justify-content:space-between">
       <h2>Recent checks</h2>
-      <button class="ghost" id="refreshHistory" type="button">Refresh</button>
+      <div class="row" style="gap:8px">
+        <button class="ghost" id="clearHistory" type="button">Clear</button>
+        <button class="ghost" id="refreshHistory" type="button">Refresh</button>
+      </div>
     </div>
     <div class="tablewrap"><table class="history">
       <thead><tr><th>When</th><th>Page</th><th>Result</th><th class="num">Dev</th><th class="num">GTM</th></tr></thead>
@@ -391,16 +394,18 @@ details.plain > summary { cursor: pointer; font-weight: 600; }
     }
     const chips = $('journeyChips');
     chips.replaceChildren();
-    for (const j of journeys.filter(j => j.path)) {
-      chips.append(el('button', { class: 'chip', type: 'button', onclick: () => { $('urlInput').value = `https://uat.thefynprint.com${j.path}`; hintFor(); $('urlInput').focus(); } }, `${j.name} (UAT)`));
+    // one chip per page (a page can have several journeys: new visitor, logged-in user, each plan)
+    for (const path of [...new Set(journeys.filter(j => j.path).map(j => j.path))]) {
+      chips.append(el('button', { class: 'chip', type: 'button', onclick: () => { $('urlInput').value = `https://uat.thefynprint.com${path}`; hintFor(); $('urlInput').focus(); } }, `${path} (UAT)`));
     }
   }
   function hintFor() {
     const v = $('urlInput').value.trim();
     let u; try { u = new URL(/^https?:\/\//.test(v) ? v : `https://${v}`); } catch { $('urlInput').setCustomValidity(''); $('urlHint').textContent = 'Paste a TFP page. UAT links run the full journey, including a test sign-up. Live links never submit forms.'; return; }
     const uat = /^(www\.)?uat\./.test(u.hostname);
-    const j = journeys.find(x => x.path && x.path.replace(/\/$/, '') === u.pathname.replace(/\/$/, ''));
-    const what = j ? `Runs the "${j.name}" journey (${j.steps} steps)` : 'Not a journey in the contract: checks the page-load tags, then clicks each button on the page';
+    const js = journeys.filter(x => x.path && x.path.replace(/\/$/, '') === u.pathname.replace(/\/$/, ''));
+    const what = js.length ? `Runs ${js.length > 1 ? `${js.length} journeys` : 'the journey'}: ${js.map(j => `"${j.name}"`).join(', ')}`
+      : 'Explores the page like a new visitor (follows the main button through forms, OTP and payment), then clicks the page\'s other buttons';
     const where = uat ? 'UAT: forms are submitted with the test account.' : 'Live: nothing is submitted.';
     $('urlHint').textContent = `${what}. ${where} Every tag hit is recorded and blocked, so nothing reaches GA4 or the ad platforms.`;
   }
@@ -512,7 +517,7 @@ details.plain > summary { cursor: pointer; font-weight: 600; }
   function render() {
     const { result, fixes, reportMd, runUrl, id } = current;
     const j0 = (result.journeys || [])[0] || {};
-    $('resMode').textContent = `${result.mode === 'page_audit' ? 'Page audit' : 'Journey'} · ${(result.env || '').toUpperCase()} · ${result.ran_at ? new Date(result.ran_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : ''}`;
+    $('resMode').textContent = `${result.mode === 'page_audit' ? 'Page audit' : result.mode === 'auto' ? 'Auto-explore' : 'Journey'} · ${(result.env || '').toUpperCase()} · ${result.ran_at ? new Date(result.ran_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : ''}`;
     $('resTitle').textContent = (result.journeys || []).length > 1 ? `${j0.name} + ${result.journeys.length - 1} more` : (j0.name || 'Run');
     const fullUrl = result.url || j0.start_url || '';
     let shortUrl = fullUrl; try { const u = new URL(fullUrl); shortUrl = u.origin + u.pathname; } catch {}
@@ -659,14 +664,17 @@ details.plain > summary { cursor: pointer; font-weight: 600; }
 
   // ---------- history ----------
   async function loadHistory() {
-    const idx = await raw('runs/index.json', RESULTS).catch(() => null);
+    const all = await raw('runs/index.json', RESULTS).catch(() => null);
+    // latest 3 only; "Clear" hides everything up to the moment it was pressed
+    const clearedAt = Number(store.get('tfp-sentinel-cleared-at') || 0);
+    const idx = (all || []).filter(r => new Date(r.ran_at).getTime() > clearedAt).slice(0, 3);
     const body = $('historyBody'); body.replaceChildren();
     $('historyCard').hidden = false;
-    if (!idx || !idx.length) {
-      body.append(el('tr', {}, el('td', { colspan: '5', class: 'hint' }, 'No checks yet. Paste a page above and press Run check. Weekly live checks also appear here.')));
+    if (!idx.length) {
+      body.append(el('tr', {}, el('td', { colspan: '5', class: 'hint' }, 'No recent checks. Paste a page above and press Run check. Weekly live checks also appear here.')));
       return null;
     }
-    for (const r of idx.slice(0, 25)) {
+    for (const r of idx) {
       const page = r.url ? (() => { try { const u = new URL(r.url); return `${u.hostname.replace(/^www\./, '')}${u.pathname}`; } catch { return r.url; } })() : (r.name || 'Contract journeys');
       body.append(el('tr', { class: 'clickable', tabindex: '0', onclick: () => pick(r), onkeydown: e => { if (e.key === 'Enter') pick(r); } },
         el('td', { class: 'num' }, new Date(r.ran_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })),
@@ -682,6 +690,7 @@ details.plain > summary { cursor: pointer; font-weight: 600; }
     if (result) openRun(r.id, result, r.run_url);
   }
   $('refreshHistory').addEventListener('click', loadHistory);
+  $('clearHistory').addEventListener('click', () => { store.set('tfp-sentinel-cleared-at', String(Date.now())); loadHistory(); });
 
   // ---------- start ----------
   async function start() {
