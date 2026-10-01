@@ -183,6 +183,9 @@ details.plain > summary { cursor: pointer; font-weight: 600; }
   <section class="card setup" id="setup" hidden>
     <div class="eyebrow">One-time setup</div>
     <h2>Connect this page to the TFP-Tracking repo</h2>
+    <p><b>Got a team key from Sargam?</b> Paste it in the box below and press Connect. That's all.</p>
+    <details>
+      <summary class="hint">Setting it up for the first time (repo owner only)</summary>
     <ol>
       <li>Open <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">GitHub → new fine-grained token</a>.</li>
       <li>Name it <code>TFP Sentinel page</code> and set <b>Expiration</b> to one year.</li>
@@ -190,8 +193,9 @@ details.plain > summary { cursor: pointer; font-weight: 600; }
       <li><b>Permissions → Repository:</b> Actions = <i>Read and write</i>, Contents = <i>Read-only</i>.</li>
       <li>Generate it, copy it, and paste it below. It stays in this browser only.</li>
     </ol>
+    </details>
     <form id="tokenForm" class="url-row">
-      <input id="tokenInput" type="password" autocomplete="off" placeholder="github_pat_..." aria-label="GitHub token">
+      <input id="tokenInput" type="password" autocomplete="off" placeholder="Paste the key (starts with github_pat_)" aria-label="GitHub key">
       <button class="primary" type="submit">Connect</button>
     </form>
     <div id="setupError" class="error-box" hidden></div>
